@@ -1668,7 +1668,7 @@ mv  /etc/openstack-dashboard/{local_settings,local_settings.bk}
 
 - Cập nhật cấu hình 
 ```sh
-curl --url https://raw.githubusercontent.com/nhanhoadocs/tutorial-openstack/master/docs/template/local_settings --output /etc/openstack-dashboard/local_settings
+curl --url https://raw.githubusercontent.com/uncelvel/tutorial-openstack/master/docs/template/local_settings --output /etc/openstack-dashboard/local_settings
 
 sed -Ei 's|0.0.0.0|10.10.22.120|g' /etc/openstack-dashboard/local_settings
 new_secret=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 20 | head -n 1)
@@ -1742,7 +1742,7 @@ sda                     252:0    0   50G  0 disk
 ├─sda2                  252:2    0   38G  0 part 
 │ └─VolGroup00-LogVol01 253:0    0   38G  0 lvm  /
 └─vda3                  252:3    0    8G  0 part [SWAP]
-sdb                     252:16   0  100G  0 disk 
+vdb                     252:16   0  100G  0 disk 
 [root@controller ~(admin-openrc)]$ 
 ```
 
@@ -1808,10 +1808,10 @@ systemctl enable lvm2-lvmetad.service
 systemctl start lvm2-lvmetad.service
 ```
 
-- Chỉnh sửa file `/etc/lvm/lvm.conf` bổ sung filter cho `sdb`
+- Chỉnh sửa file `/etc/lvm/lvm.conf` bổ sung filter cho `vdb`
 ```sh 
     # Line 142
-    filter = [ "a/sdb/", "r/.*/"]
+    filter = [ "a/vdb/", "r/.*/"]
 ```
 
 - Tạo LVM volume /dev/vdb:
