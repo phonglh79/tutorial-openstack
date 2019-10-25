@@ -48,4 +48,8 @@
 
 [4.9 Check list cài đặt Compute](docs/other/check_list_compute.md)
 
-[](docs/other/multi-region.md)
+[4.10 Cấu hình MultiRegion](docs/other/multi-region.md)
+
+[4.11 Cấu hình Message Queue](docs/other/message_queue.md)
+
+[4.11 Lưu ý đối với cài đặt vận hành](docs/other/note.md)
