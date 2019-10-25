@@ -1670,9 +1670,11 @@ mv  /etc/openstack-dashboard/{local_settings,local_settings.bk}
 ```sh
 curl --url https://raw.githubusercontent.com/uncelvel/tutorial-openstack/master/docs/template/local_settings --output /etc/openstack-dashboard/local_settings
 
-sed -Ei 's|0.0.0.0|10.10.22.120|g' /etc/openstack-dashboard/local_settings
 new_secret=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 20 | head -n 1)
-sed -Ei "s|00000000|$new_secret|g" local_settings
+sed -Ei "s|00000000|$new_secret|g" /etc/openstack-dashboard/local_settings
+
+sed -Ei 's|0.0.0.0|10.10.22.120|g' /etc/openstack-dashboard/local_settings
+
 chmod 640 /etc/openstack-dashboard/local_settings
 chown root:apache /etc/openstack-dashboard/local_settings
 ```
