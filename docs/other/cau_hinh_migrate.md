@@ -1,72 +1,89 @@
 # Cấu hình Cold-migrate (SCP - SSH connection)
 
-Cấu hình tạo key nova trên node Compute01
+Bước 1: Trên cả 2 node Compute: Bổ sung `/etc/hosts`
 ```sh 
-[root@compute01 ~]# usermod -s /bin/bash nova
-[root@compute01 ~]# su nova 
-bash-4.2$ cd /var/lib/nova/
-bash-4.2$ ls
-buckets  instances  keys  networks  tmp
-bash-4.2$ pwd 
-/var/lib/nova
-bash-4.2$ ssh-keygen 
-Generating public/private rsa key pair.
-Enter file in which to save the key (/var/lib/nova/.ssh/id_rsa): 
-Created directory '/var/lib/nova/.ssh'.
-Enter passphrase (empty for no passphrase): 
-Enter same passphrase again: 
-Your identification has been saved in /var/lib/nova/.ssh/id_rsa.
-Your public key has been saved in /var/lib/nova/.ssh/id_rsa.pub.
-The key fingerprint is:
-SHA256:QFzexFdc5dejzL4N61aj+8b91aLCxf6U46tK0M0m8ag nova@compute01
-The key's randomart image is:
-+---[RSA 2048]----+
-|     ......  o..+|
-|     ... o. . ...|
-|      . . o.   .+|
-|       . . *o . o|
-|        S +.=+   |
-|         o o+  +.|
-|        E..o oO =|
-|         .o .*==o|
-|          .o=BB+o|
-+----[SHA256]-----+
+echo "
+10.10.22.81 Compute1
+10.10.22.85 Compute2" >> /etc/hosts
+```
+
+Bước 2: Trên cả 2 node Compute: Tạo user `nova` và đặt passwd
+```sh 
+usermod -s /bin/bash nova
+passwd nova
+```
+> Đặt passwd bất kỳ (Cần lưu lại để cấu hình các bước tiếp theo)
+
+Bước 3: Trên Compute1 tiến hành tạo ssh-keygen cho nova user 
+```sh 
+su nova 
+cd 
+cat /dev/zero | ssh-keygen -q -N ""
+```
+
+Bước 4: Trên Compute1: Tạo file authorized và config 
+```sh 
+su nova 
+cd 
+echo 'StrictHostKeyChecking no' > /var/lib/nova/.ssh/config
+cat .ssh/id_rsa.pub >> /var/lib/nova/.ssh/authorized_keys
+exit 
+chmod 644 /var/lib/nova/.ssh/authorized_keys
+```
+
+Bước 5: Trên Compute1: Kiểm tra các file trong thư mục `.ssh`
+```sh 
+su nova 
+cd 
+ls -lah .ssh/
+```
+
+> Kết quả 
+```sh 
+bash-4.2$ ls -lah .ssh/
+total 20K
+drwx------ 2 nova nova   94 15:18 10 Th09 .
+drwxr-xr-x 9 nova nova  131 15:17 10 Th09 ..
+-rw-r--r-- 1 nova nova  400 15:17 10 Th09 authorized_keys
+-rw-r--r-- 1 nova nova   25 15:17 10 Th09 config
+-rw------- 1 nova nova 1,7K 15:17 10 Th09 id_rsa
+-rw-r--r-- 1 nova nova  400 15:17 10 Th09 id_rsa.pub
 bash-4.2$ 
 ```
 
 
-Trên node compute01 (node đã có).
-Thực hiện với quyền root, scp key pair tới compute node
+Bước 6: Trên Compute2: Tạo folder `/var/lib/nova/.ssh/`
 ```sh 
-scp /var/lib/nova/.ssh/id_rsa compute02:~/
-scp /var/lib/nova/.ssh/authorized_keys compute02:~/
+su nova 
+cd
+mkdir -p /var/lib/nova/.ssh/
 ```
 
-
-Trên node compute02 mới : 
- - Cho phép login với user nova
+Bước 7: Trên Compute1: Copy toàn bộ trong thư mục .ssh qua Compute2
 ```sh 
-usermod -s /bin/bash nova
+su nova 
+cd 
+scp Compute2:.ssh/authorized_keys .ssh/
 ```
+> Nhập passwd của nova user (Đã tạo ở bước 2)
 
-- Copy keypair vào thư mục nova 
+Bước 8: Đứng trên 2 Compute truy cập nova user và tiến hành ssh qua lại lẫn nhau xem có cần passwd không 
+
+- Trên Compute1
 ```sh 
-mkdir -p /var/lib/nova/.ssh
-cp id_rsa /var/lib/nova/.ssh/
-cat authorized_keys >> /var/lib/nova/.ssh/authorized_keys
-echo 'StrictHostKeyChecking no' >> /var/lib/nova/.ssh/config
-cd /var/lib/nova/.ssh/
-chown nova:nova id_rsa
-chown nova:nova authorized_keys
-chown nova:nova config
+su nova 
+cd 
+ssh Compute2
 ```
 
-- Kiểm tra việc ssh bằng user nova
-```sh
-su nova
-ssh compute01
+- Trên Compute2
+```sh 
+su nova 
+cd 
+ssh Compute1
 ```
-> Nếu đăng nhập thành công thì tức là chức năng cold-migrate đã sẵn sàng.  
+
+> SSH không cần passwd là thành công chức năng cold-migrate đã sẵn sàng.  
 
 ## Kiểm tra việc migrate
 

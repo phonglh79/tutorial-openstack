@@ -1058,6 +1058,7 @@ transport_url = rabbit://openstack:passla123@10.10.22.120:5672
 my_ip = 10.10.22.121
 use_neutron = True
 firewall_driver = nova.virt.firewall.NoopFirewallDriver
+resume_guests_state_on_host_boot=false
 [api]
 auth_strategy = keystone
 [api_database]
@@ -1697,60 +1698,69 @@ user: admin
 password: passla123
 ```
 
-![](../../images/noha_dashboard.png)
+![](../../images/stein/dashboard001.png)
 
 ### Tạo network
 Truy cập `Admin` --> `Network` --> `Networks` Chọn `Create Network`
-![](../../images/noha_createnetwork1.png)
-![](../../images/noha_createnetwork2.png)
-![](../../images/noha_createnetwork3.png)
-![](../../images/noha_createnetwork4.png)
 
+![](../../images/stein/dashboard002.png)
+![](../../images/stein/dashboard003.png)
+![](../../images/stein/dashboard004.png)
+![](../../images/stein/dashboard005.png)
 
 ### Tạo Flavor
 Truy cập `Admin` --> `Compute` --> `Flavors` Chọn `Create Flavor`
-![](../../images/noha_createflavor01.png)
+
+![](../../images/stein/dashboard006.png)
+![](../../images/stein/dashboard007.png)
 
 ### Boot thử 1 máy ảo 
 Truy cập `Projects` --> `Compute` --> `Instance` Chọn `Launch Instance`
-![](../../images/noha_createvm01.png)
-![](../../images/noha_createvm02.png)
-![](../../images/noha_createvm03.png)
-![](../../images/noha_createvm04.png)
 
-> VM tạo thành công nhưng chưa ping được ra ngoài, SSH ngoài vào ko OK 
+![](../../images/stein/dashboard008.png)
+![](../../images/stein/dashboard009.png)
+![](../../images/stein/dashboard010.png)
+![](../../images/stein/dashboard011.png)
+
+Click vào VM và kiểm tra login, kết nối internet 
+
+![](../../images/stein/dashboard012.png)
+
+> VM tạo thành công Kết nối Internet OK nhưng phía ngoài chưa kết nối được vào VM qua SSH
 
 ### Mở Security Group 
 Truy cập `Projects` --> `Network` --> `Security Groups` Chọn `Manage Rules`
-![](../../images/noha_sc01.png)
+
+![](../../images/stein/dashboard013.png)
 
 Chọn `Add rules`
-![](../../images/noha_sc02.png)
 
-> Kiểm tra lại VM ok có thể ping 
+![](../../images/stein/dashboard014.png)
 
+> Kiểm tra lại VM ok có thể ping ssh 
+
+![](../../images/stein/dashboard015.png)
 
 ## 3.6 Cài đặt Cinder (Service Storage) với backend là LVM (Chỉ cấu hình trên Node Controller) <a name="3.6"></a>
+
+Đối với hệ thống đã cài đặt xong đến bước 3.5 thì mới chỉ có thể boot được VM từ local (Disk VM sẽ nằm trên chính Compute). Cinder sẽ cung cấp giải pháp lưu trữ cho OPS cho phép lưu trữ disk của VM tại Share Storage (Ở đây là LVM ))
 
 Chuẩn bị: Add thêm 1 ổ `/dev/vdb` tối thiểu 100G vào Node Controller
 
 - Kiểm tra ổ 
 ```sh
-[root@controller ~(admin-openrc)]$ lsblk
-NAME                    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
-sr0                      11:0    1 1024M  0 rom  
-sda                     252:0    0   50G  0 disk 
-├─sda1                  252:1    0    4G  0 part /boot
-├─sda2                  252:2    0   38G  0 part 
-│ └─VolGroup00-LogVol01 253:0    0   38G  0 lvm  /
-└─vda3                  252:3    0    8G  0 part [SWAP]
-vdb                     252:16   0  100G  0 disk 
-[root@controller ~(admin-openrc)]$ 
+[root@controller ~]# lsblk 
+NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sr0     11:0    1 1024M  0 rom  
+vda    253:0    0   30G  0 disk 
+└─vda1 253:1    0   30G  0 part /
+vdb    253:16   0   50G  0 disk 
+[root@controller ~]# 
 ```
 
 - Đăng nhập MySQL
 ```sh 
-mysql -u root -p
+mysql
 ```
 
 - Create DB và User cho Cinder
@@ -1806,8 +1816,7 @@ yum install -y lvm2 device-mapper-persistent-data openstack-cinder targetcli
 
 - Enable và start LVM metadata service
 ```
-systemctl enable lvm2-lvmetad.service
-systemctl start lvm2-lvmetad.service
+systemctl enable --now lvm2-lvmetad.service
 ```
 
 - Chỉnh sửa file `/etc/lvm/lvm.conf` bổ sung filter cho `vdb`
@@ -1815,6 +1824,8 @@ systemctl start lvm2-lvmetad.service
     # Line 142
     filter = [ "a/vdb/", "r/.*/"]
 ```
+
+![](../../images/stein/dashboard016.png)
 
 - Tạo LVM volume /dev/vdb:
 ```
@@ -1910,17 +1921,48 @@ systemctl restart openstack-nova-api.service
 
 Enable và start Block Storage services
 ```sh
-systemctl enable openstack-cinder-api.service openstack-cinder-scheduler.service openstack-cinder-volume.service 
-systemctl start openstack-cinder-api.service openstack-cinder-scheduler.service openstack-cinder-volume.service 
+systemctl enable --now openstack-cinder-api.service openstack-cinder-scheduler.service openstack-cinder-volume.service 
 ```
 
 Kiểm tra 
 ```sh 
-[root@controller ~(admin-openrc)]$ cinder service-list 
-+------------------+-----------------+------+---------+-------+----------------------------+-----------------+
-| Binary           | Host            | Zone | Status  | State | Updated_at                 | Disabled Reason |
-+------------------+-----------------+------+---------+-------+----------------------------+-----------------+
-| cinder-scheduler | controller      | nova | enabled | up    | 2019-05-06T07:20:02.000000 | -               |
-| cinder-volume    | controller@lvm  | nova | enabled | up    | 2019-05-02T07:42:52.000000 | -               |
-+------------------+-----------------+------+---------+-------+----------------------------+-----------------+
+cinder service-list
 ```
+
+> Kết quả
+```sh 
+[root@controller ~(admin-openrc-r1)]$ cinder service-list
++------------------+----------------+------+---------+-------+----------------------------+-----------------+
+| Binary           | Host           | Zone | Status  | State | Updated_at                 | Disabled Reason |
++------------------+----------------+------+---------+-------+----------------------------+-----------------+
+| cinder-scheduler | controller     | nova | enabled | up    | 2019-10-26T08:25:23.000000 | -               |
+| cinder-volume    | controller@lvm | nova | enabled | up    | 2019-10-26T08:25:23.000000 | -               |
++------------------+----------------+------+---------+-------+----------------------------+-----------------+
+[root@controller ~(admin-openrc-r1)]$ lsblk 
+NAME                                            MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sr0                                              11:0    1 1024M  0 rom  
+vda                                             253:0    0   30G  0 disk 
+└─vda1                                          253:1    0   30G  0 part /
+vdb                                             253:16   0   50G  0 disk 
+├─cinder--volumes-cinder--volumes--pool_tmeta   252:0    0   48M  0 lvm  
+│ └─cinder--volumes-cinder--volumes--pool-tpool 252:2    0 47,5G  0 lvm  
+│   └─cinder--volumes-cinder--volumes--pool     252:3    0 47,5G  0 lvm  
+└─cinder--volumes-cinder--volumes--pool_tdata   252:1    0 47,5G  0 lvm  
+  └─cinder--volumes-cinder--volumes--pool-tpool 252:2    0 47,5G  0 lvm  
+    └─cinder--volumes-cinder--volumes--pool     252:3    0 47,5G  0 lvm  
+[root@controller ~(admin-openrc-r1)]$ 
+```
+
+### Tiến hành tạo Volume thử và kiểm tra 
+
+Truy cập `Projects` --> `Volumes` --> `Volumes` Chọn `Create Volume`
+
+![](../../images/stein/dashboard017.png)
+![](../../images/stein/dashboard018.png)
+![](../../images/stein/dashboard019.png)
+
+### Tiến hành tạo VM mới từ volume và kiểm tra 
+
+![](../../images/stein/dashboard020.png)
+![](../../images/stein/dashboard021.png)
+

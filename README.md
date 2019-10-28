@@ -2,31 +2,35 @@
 
 # Tổng quan OpenStack 
 
-# Cài đặt OpenStack 
-
-[2.1 Cài đặt PackStack Queens](docs/setup/packstack.md)
-
-[2.2 Cài đặt Manual Queens](docs/setup/manual_install.md)
-
-[2.3 Cài đặt OPS theo scripts bản Queens](https://github.com/uncelvel/openstack-tools/blob/master/docs/openstack-queens-CentOS7-scripts.md)
-
-[2.4 Cài đặt Manual Queens tích hợp Ceph (backend Ceph)](https://github.com/uncelvel/tutorial-ceph/blob/master/docs/operating/ceph-vs-openstack.md)
-
 # Chi tiết các Project của OpenStack 
 
-3.1 Keystone
+[2.0 Overview ](docs/overview/overview.md)
 
-3.2 Glance
+2.1 Keystone
 
-3.3 Nova
+2.2 Glance
 
-3.4 Cinder
+2.3 Nova
 
-3.5 Neutron
+2.4 Cinder
 
-3.6 Horizon 
+2.5 Neutron
 
-3.7 ..
+2.6 Horizon 
+
+2.7 ..
+
+# Cài đặt OpenStack 
+
+[3.1 Cài đặt PackStack Queens](docs/setup/packstack.md)
+
+[3.2 Cài đặt Manual Openstack Queens](docs/setup/manual_install_queens.md)
+
+[3.3 Cài đặt OPS theo scripts bản Queens](https://github.com/uncelvel/openstack-tools/blob/master/docs/openstack-queens-CentOS7-scripts.md)
+
+[3.4 Cài đặt Manual Queens tích hợp Ceph (backend Ceph)](https://github.com/uncelvel/tutorial-ceph/blob/master/docs/operating/ceph-vs-openstack.md)
+
+[3.5 Cài đặt Manual Openstack Stein](docs/setup/manual_install_stein.md)
 
 # Các phần bổ sung nâng cao 
 
