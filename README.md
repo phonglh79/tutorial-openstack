@@ -56,4 +56,6 @@
 
 [4.11 Cấu hình Message Queue](docs/other/message_queue.md)
 
-[4.11 Lưu ý đối với cài đặt vận hành](docs/other/note.md)
+[4.12 Lưu ý đối với cài đặt vận hành](docs/other/note.md)
+
+[4.13 Check CPU live Migrate Compute mới](docs/other/live_migrate_check.md)
