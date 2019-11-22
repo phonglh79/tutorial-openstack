@@ -1,4 +1,4 @@
-# I. Install OpenStack Manual 
+# I. Install OpenStack Stein Manual 
 
 [1. Chuẩn bị mô hình](#1)
 
@@ -20,30 +20,36 @@
 
 [3.4. Neutron](#3.4)  
 
-[3.5. Cinder](#3.5) 
+[3.5. Horizon](#3.5) 
 
-[3.6. Horizon](#3.6) 
-
-
-## 1.1. Môi trường LAB <a name="1"></a>
- - Giả lập trên Vmware ESXi 6.0
- - CentOS 7.4 Server 64bit 1804
+[3.6. Cinder](#3.6) 
 
 ## 1.2. Mô hình cài đặt
 
-![](../../images/noha_openstack_queen_topology.png)
+![](../../images/noha_openstack_stein_topology.png)
 
 ## 1.3 IP Planning
 
-![](../../images/noha_openstack_queens_ipplanning.png)
+![](../../images/noha_openstack_stein_ipplanning.png)
 
 # II. Cài đặt các thành phần cần thiết <a name="2"></a>
 
 ## 2.1 Install OS <a name="2.1"></a>
 
+> Lưu ý đến thời điểm hiện tại 2019-10-25
+
+Cài đặt trên CentOS7 
+
 ## 2.2 Các bước cài đặt <a name="2.2"></a>
 
 ### Các bước chuẩn bị trên Controller 
+
+- Cài đặt epel-release và các package cần thiết 
+```sh
+yum install -y epel-release
+yum update -y && yum upgrade -y
+yum install -y vim telnet wget curl byobu net-tools
+```
 
 - Thiết lập Hostname
 ```sh 
@@ -52,69 +58,95 @@ hostnamectl set-hostname controller
 
 - Thiết lập IP
 ```sh 
-echo "Setup IP  ens160"
-nmcli c modify ens160 ipv4.addresses 10.10.10.61/24
-nmcli c modify ens160 ipv4.gateway 10.10.10.1
-nmcli c modify ens160 ipv4.dns 8.8.8.8
-nmcli c modify ens160 ipv4.method manual
-nmcli con mod ens160 connection.autoconnect yes
+nmcli connection show 
+nmcli c modify "Wired connection 1" connection.id eth1
+nmcli c modify "Wired connection 2" connection.id eth2
+nmcli c modify "Wired connection 3" connection.id eth3
 
-echo "Setup IP ens192"
-nmcli c modify ens192 ipv4.addresses 10.10.11.61/24
-nmcli c modify ens192 ipv4.method manual
-nmcli con mod ens192 connection.autoconnect yes
+echo "Setup IP  eth0"
+nmcli c modify eth0 ipv4.addresses 10.10.22.120/24
+nmcli c modify eth0 ipv4.gateway 10.10.22.1
+nmcli c modify eth0 ipv4.dns 8.8.8.8
+nmcli c modify eth0 ipv4.method manual
+nmcli con mod eth0 connection.autoconnect yes
 
-echo "Setup IP ens224"
-nmcli c modify ens224 ipv4.addresses 10.10.12.61/24
-nmcli c modify ens224 ipv4.method manual
-nmcli con mod ens224 connection.autoconnect yes
+echo "Setup IP eth1"
+nmcli c modify eth1 ipv4.addresses 10.10.23.120/24
+nmcli c modify eth1 ipv4.method manual
+nmcli con mod eth1 connection.autoconnect yes
+
+echo "Setup IP eth2"
+nmcli c modify eth2 ipv4.addresses 10.10.24.120/24
+nmcli c modify eth2 ipv4.method manual
+nmcli con mod eth2 connection.autoconnect yes
+
+echo "Setup IP eth3"
+nmcli c modify eth3 ipv4.addresses 10.10.25.120/24
+nmcli c modify eth3 ipv4.method manual
+nmcli con mod eth3 connection.autoconnect yes
 
 echo "Disable Firewall & SElinux"
 sudo systemctl disable firewalld
 sudo systemctl stop firewalld
-sudo systemctl disable NetworkManager
-sudo systemctl stop NetworkManager
 sudo systemctl enable network
 sudo systemctl start network
-sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 ```
 
-- Khai báo repo và cài đặt các package cho OpenStack Queens
+- Disable IPv6 (Tạm thời)
+```sh 
+echo "
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1 " >> /etc/sysctl.conf
+
+sysctl -p
+```
+
+- Khai báo repo và cài đặt các package cho OpenStack Stein 
 ```sh 
 echo '[mariadb]
 name = MariaDB
-baseurl = http://yum.mariadb.org/10.2/centos7-amd64
+baseurl = http://yum.mariadb.org/10.4/centos7-amd64
 gpgkey=https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
 gpgcheck=1' >> /etc/yum.repos.d/MariaDB.repo
 
-yum install -y epel-release
-yum update -y
-yum install -y centos-release-openstack-queens \
-   open-vm-tools python2-PyMySQL vim telnet wget curl 
+yum install -y centos-release-openstack-stein python2-PyMySQL 
 yum install -y python-openstackclient openstack-selinux 
 yum upgrade -y
 ```
 
 - Setup timezone về Ho_Chi_Minh
 ```sh
-rm -f /etc/localtime
-ln -s /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime
+timedatectl set-timezone Asia/Ho_Chi_Minh
+```
+
+- Cài đặt đồng bộ thời gian 
+```sh 
+yum install chrony -y
+systemctl enable --now chronyd
+```
+
+- Kiểm tra 
+```sh 
+timedatectl
+```
+
+> Kết quả 
+```sh 
+      Local time: T6 2019-10-25 14:02:44 +07
+  Universal time: T6 2019-10-25 07:02:44 UTC
+        RTC time: T6 2019-10-25 07:02:43
+       Time zone: Asia/Ho_Chi_Minh (+07, +0700)
+     NTP enabled: yes
+NTP synchronized: yes
+ RTC in local TZ: no
+      DST active: n/a
 ```
 
 - Bổ sung cmd_log
 ```sh 
-curl -Lso- https://raw.githubusercontent.com/nhanhoadocs/scripts/master/Utilities/cmdlog.sh | bash
+curl -Lso- https://raw.githubusercontent.com/nhanhoadocs/ghichep-cmdlog/master/cmdlog.sh | bash
 ```
-
-- Option bổ sung: Cài đặt collector sidecard để đẩy log lên Graylog
-```sh 
-yum install wget -y
-wget https://raw.githubusercontent.com/nhanhoadocs/scripts/master/Utilities/graylog-collector-sidecar.sh
-chmod +x graylog-collector-sidecar.sh 
-bash graylog-collector-sidecar.sh 
-```
-> Nhập IP management của Graylog Server và IP management của Server 
 
 - Reboot Server 
 ```sh 
@@ -122,6 +154,14 @@ init 6
 ```
 
 ### Các bước chuẩn bị trên Compute1
+
+- Cài đặt epel-release và các package cần thiết 
+```sh
+yum install -y epel-release
+yum update -y && yum upgrade -y
+yum install -y vim telnet wget curl byobu net-tools
+```
+
 - Thiết lập Hostname
 ```sh 
 hostnamectl set-hostname compute1
@@ -129,252 +169,98 @@ hostnamectl set-hostname compute1
 
 - Thiết lập IP
 ```sh 
-echo "Setup IP  ens160"
-nmcli c modify ens160 ipv4.addresses 10.10.10.62/24
-nmcli c modify ens160 ipv4.gateway 10.10.10.1
-nmcli c modify ens160 ipv4.dns 8.8.8.8
-nmcli c modify ens160 ipv4.method manual
-nmcli con mod ens160 connection.autoconnect yes
+nmcli connection show 
+nmcli c modify "Wired connection 1" connection.id eth1
+nmcli c modify "Wired connection 2" connection.id eth2
+nmcli c modify "Wired connection 3" connection.id eth3
 
-echo "Setup IP ens192"
-nmcli c modify ens192 ipv4.addresses 10.10.11.62/24
-nmcli c modify ens192 ipv4.method manual
-nmcli con mod ens192 connection.autoconnect yes
+echo "Setup IP  eth0"
+nmcli c modify eth0 ipv4.addresses 10.10.22.121/24
+nmcli c modify eth0 ipv4.gateway 10.10.22.1
+nmcli c modify eth0 ipv4.dns 8.8.8.8
+nmcli c modify eth0 ipv4.method manual
+nmcli con mod eth0 connection.autoconnect yes
 
-echo "Setup IP ens224"
-nmcli c modify ens224 ipv4.addresses 10.10.12.62/24
-nmcli c modify ens224 ipv4.method manual
-nmcli con mod ens224 connection.autoconnect yes
+echo "Setup IP eth1"
+nmcli c modify eth1 ipv4.addresses 10.10.23.121/24
+nmcli c modify eth1 ipv4.method manual
+nmcli con mod eth1 connection.autoconnect yes
+
+echo "Setup IP eth2"
+nmcli c modify eth2 ipv4.addresses 10.10.24.121/24
+nmcli c modify eth2 ipv4.method manual
+nmcli con mod eth2 connection.autoconnect yes
+
+echo "Setup IP eth3"
+nmcli c modify eth3 ipv4.addresses 10.10.25.121/24
+nmcli c modify eth3 ipv4.method manual
+nmcli con mod eth3 connection.autoconnect yes
 
 echo "Disable Firewall & SElinux"
 sudo systemctl disable firewalld
 sudo systemctl stop firewalld
-sudo systemctl disable NetworkManager
-sudo systemctl stop NetworkManager
 sudo systemctl enable network
 sudo systemctl start network
-sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 ```
 
-- Khai báo repo và cài đặt các package cho OpenStack Queens
+- Khai báo repo và cài đặt các package cho OpenStack Stein 
 ```sh 
 echo '[mariadb]
 name = MariaDB
-baseurl = http://yum.mariadb.org/10.2/centos7-amd64
+baseurl = http://yum.mariadb.org/10.4/centos7-amd64
 gpgkey=https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
 gpgcheck=1' >> /etc/yum.repos.d/MariaDB.repo
 
 yum install -y epel-release
-yum update -y
-yum install -y centos-release-openstack-queens \
-   open-vm-tools python2-PyMySQL vim telnet wget curl 
+yum update -y && yum upgrade -y
+yum install -y centos-release-openstack-stein python2-PyMySQL vim telnet wget curl 
 yum install -y python-openstackclient openstack-selinux 
 yum upgrade -y
 ```
 
 - Setup timezone về Ho_Chi_Minh
+```sh
+timedatectl set-timezone Asia/Ho_Chi_Minh
+```
+
+- Cài đặt đồng bộ thời gian 
 ```sh 
-rm -f /etc/localtime
-ln -s /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime
+yum install chrony -y
+systemctl enable --now chronyd
+```
+
+- Kiểm tra 
+```sh 
+timedatectl
+```
+
+> Kết quả 
+```sh 
+      Local time: T6 2019-10-25 14:02:44 +07
+  Universal time: T6 2019-10-25 07:02:44 UTC
+        RTC time: T6 2019-10-25 07:02:43
+       Time zone: Asia/Ho_Chi_Minh (+07, +0700)
+     NTP enabled: yes
+NTP synchronized: yes
+ RTC in local TZ: no
+      DST active: n/a
 ```
 
 - Bổ sung cmd_log
 ```sh 
-curl -Lso- https://raw.githubusercontent.com/nhanhoadocs/scripts/master/Utilities/cmdlog.sh | bash
+curl -Lso- https://raw.githubusercontent.com/nhanhoadocs/ghichep-cmdlog/master/cmdlog.sh | bash
 ```
-
-- Option bổ sung: Cài đặt collector sidecard để đẩy log lên Graylog
-```sh 
-yum install wget -y
-wget https://raw.githubusercontent.com/nhanhoadocs/scripts/master/Utilities/graylog-collector-sidecar.sh
-chmod +x graylog-collector-sidecar.sh 
-bash graylog-collector-sidecar.sh 
-```
-> Nhập IP management của Graylog Server và IP management của Server 
 
 - Reboot Server 
 ```sh 
-init 6
+init 0
 ```
-### Các bước chuẩn bị trên Compute2
-- Thiết lập Hostname
-```sh 
-hostnamectl set-hostname compute2
-```
+>  ## Snapshot VM 
 
-- Thiết lập IP
-```sh 
-echo "Setup IP  ens160"
-nmcli c modify ens160 ipv4.addresses 10.10.10.63/24
-nmcli c modify ens160 ipv4.gateway 10.10.10.1
-nmcli c modify ens160 ipv4.dns 8.8.8.8
-nmcli c modify ens160 ipv4.method manual
-nmcli con mod ens160 connection.autoconnect yes
+## 2.3 Cài đặt MySQL (Chỉ cấu hình trên Node Controller)  <a name="2.4"></a>
 
-echo "Setup IP ens192"
-nmcli c modify ens192 ipv4.addresses 10.10.11.63/24
-nmcli c modify ens192 ipv4.method manual
-nmcli con mod ens192 connection.autoconnect yes
-
-echo "Setup IP ens224"
-nmcli c modify ens224 ipv4.addresses 10.10.12.63/24
-nmcli c modify ens224 ipv4.method manual
-nmcli con mod ens224 connection.autoconnect yes
-
-echo "Disable Firewall & SElinux"
-sudo systemctl disable firewalld
-sudo systemctl stop firewalld
-sudo systemctl disable NetworkManager
-sudo systemctl stop NetworkManager
-sudo systemctl enable network
-sudo systemctl start network
-sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
-sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
-```
-
-- Khai báo repo và cài đặt các package cho OpenStack Queens
-```sh 
-echo '[mariadb]
-name = MariaDB
-baseurl = http://yum.mariadb.org/10.2/centos7-amd64
-gpgkey=https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
-gpgcheck=1' >> /etc/yum.repos.d/MariaDB.repo
-
-yum install -y epel-release
-yum update -y
-yum install -y centos-release-openstack-queens \
-   open-vm-tools python2-PyMySQL vim telnet wget curl 
-yum install -y python-openstackclient openstack-selinux 
-yum upgrade -y
-```
-
-- Setup timezone về Ho_Chi_Minh
-```sh 
-rm -f /etc/localtime
-ln -s /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime
-```
-
-- Bổ sung cmd_log
-```sh 
-curl -Lso- https://raw.githubusercontent.com/nhanhoadocs/scripts/master/Utilities/cmdlog.sh | bash
-```
-
-- Option bổ sung: Cài đặt collector sidecard để đẩy log lên Graylog
-```sh 
-yum install wget -y
-wget https://raw.githubusercontent.com/nhanhoadocs/scripts/master/Utilities/graylog-collector-sidecar.sh
-chmod +x graylog-collector-sidecar.sh 
-bash graylog-collector-sidecar.sh 
-```
-> Nhập IP management của Graylog Server và IP management của Server 
-
-- Reboot Server 
-```sh 
-init 6
-```
-
-## 2.3 Cấu hình NTPD  <a name="2.3"></a>
-
-### Các bước chuẩn bị trên Controller
-
-Trong bài lab này sẽ sử dụng Node Controller làm NTPD Server 
-
-- Cài đặt package 
-```sh 
-yum install -y chrony
-```
-
-- Backup file cấu hình 
-```sh 
-mv /etc/chrony.{conf,conf.bk}
-```
-
-- Cấu hình cho chrony
-```sh 
-cat << EOF >> /etc/chrony.conf
-server 0.vn.pool.ntp.org iburst
-allow 10.10.10.0/24
-driftfile /var/lib/chrony/drift
-makestep 1.0 3
-rtcsync
-logdir /var/log/chrony
-EOF
-```
-
-- Enable và start chronyd
-```sh 
-systemctl start chronyd
-systemctl enable chronyd
-```
-
-- Kiểm tra đồng bộ thời gian trên Controller
-![](../../images/chrony_server.png)
-
-![](../../images/chrony_server2.png)
-
-### Các bước chuẩn bị trên Compute1
-- Cài đặt package 
-```sh 
-yum install -y chrony
-```
-
-- Backup file cấu hình 
-```sh 
-mv /etc/chrony.{conf,conf.bk}
-```
-
-- Cấu hình cho chrony
-```sh 
-cat << EOF >> /etc/chrony.conf
-server 10.10.10.61 iburst
-driftfile /var/lib/chrony/drift
-makestep 1.0 3
-rtcsync
-logdir /var/log/chrony
-EOF
-```
-
-- Enable và start chronyd
-```sh 
-systemctl start chronyd
-systemctl enable chronyd
-```
-
-- Kiểm tra đồng bộ thời gian từ NTPD-Server 
-![](../../images/chrony_client.png)
-
-### Các bước chuẩn bị trên Compute2
-- Cài đặt package 
-```sh 
-yum install -y chrony
-```
-
-- Backup file cấu hình 
-```sh 
-mv /etc/chrony.{conf,conf.bk}
-```
-
-- Cấu hình cho chrony
-```sh 
-cat << EOF >> /etc/chrony.conf
-server 10.10.10.61 iburst
-driftfile /var/lib/chrony/drift
-makestep 1.0 3
-rtcsync
-logdir /var/log/chrony
-EOF
-```
-
-- Enable và start chronyd
-```sh 
-systemctl start chronyd
-systemctl enable chronyd
-```
-
-- Kiểm tra đồng bộ thời gian từ NTPD-Server tương tự như trên Compute1
-
-## 2.4 Cài đặt MySQL (Chỉ cấu hình trên Node Controller)  <a name="2.4"></a>
+- Khởi động VM lên và tiến hành cài đặt 
 
 - Cài đặt package 
 ```sh
@@ -385,7 +271,7 @@ yum install mariadb mariadb-server -y
 ```sh 
 cat << EOF >> /etc/my.cnf.d/openstack.cnf 
 [mysqld]
-bind-address = 10.10.10.61
+bind-address = 10.10.22.120
         
 default-storage-engine = innodb
 innodb_file_per_table = on
@@ -397,8 +283,7 @@ EOF
 
 - Enable và start MySQL
 ```sh 
-systemctl enable mariadb.service
-systemctl start mariadb.service
+systemctl enable --now mariadb.service
 ```
 
 - Cài đặt passwd cho MySQL
@@ -426,16 +311,16 @@ yum install rabbitmq-server -y
 ```sh
 rabbitmq-plugins enable rabbitmq_management
 systemctl restart rabbitmq-server
+cd /usr/sbin/
 curl -O http://localhost:15672/cli/rabbitmqadmin
 chmod a+x rabbitmqadmin
-mv rabbitmqadmin /usr/sbin/
+cd
 rabbitmqadmin list users
 ```
 
 - Enable và start rabbitmq-server 
 ```sh 
-systemctl start rabbitmq-server
-systemctl enable rabbitmq-server
+systemctl enable --now rabbitmq-server
 systemctl status rabbitmq-server
 ```
 
@@ -443,7 +328,6 @@ systemctl status rabbitmq-server
 ```sh
 rabbitmqctl add_user openstack passla123
 rabbitmqctl set_permissions openstack ".*" ".*" ".*"
-systemctl enable rabbitmq-server.service
 rabbitmqctl set_user_tags openstack administrator
 ```
 
@@ -454,7 +338,7 @@ rabbitmqadmin list users
 
 - Đăng nhập vào Dashboard quản trị của Rabbit-mq
 ```sh 
-http://10.10.10.61:15672
+http://10.10.22.120:15672
 user: openstack
 password: passla123
 ```
@@ -469,13 +353,12 @@ yum install memcached python-memcached -y
 
 - Cấu hình cho memcached
 ```sh 
-sed -i "s/-l 127.0.0.1,::1/-l 10.10.10.61/g" /etc/sysconfig/memcached
+sed -i "s/-l 127.0.0.1,::1/-l 10.10.22.120/g" /etc/sysconfig/memcached
 ```
 
 - Enable và start memcached
 ```sh 
-systemctl enable memcached.service
-systemctl start memcached.service
+systemctl enable --now memcached.service
 ```
 
 ## Cài đặt xong môi trường 
@@ -488,7 +371,7 @@ systemctl start memcached.service
 
 - Đăng nhập vào MySQL
 ```sh 
-mysql -uroot -p
+mysql
 ```
 
 - Create DB và User cho Keystone
@@ -521,7 +404,7 @@ cat << EOF >> /etc/keystone/keystone.conf
 [cors]
 [credential]
 [database]
-connection = mysql+pymysql://keystone:passla123@10.10.10.61/keystone
+connection = mysql+pymysql://keystone:passla123@10.10.22.120/keystone
 [domain_config]
 [endpoint_filter]
 [endpoint_policy]
@@ -538,7 +421,12 @@ connection = mysql+pymysql://keystone:passla123@10.10.10.61/keystone
 [oslo_messaging_amqp]
 [oslo_messaging_kafka]
 [oslo_messaging_notifications]
+#driver = messagingv2
 [oslo_messaging_rabbit]
+#rabbit_retry_interval = 1
+#rabbit_retry_backoff = 2
+#amqp_durable_queues = true
+#rabbit_ha_queues = true
 [oslo_messaging_zmq]
 [oslo_middleware]
 [oslo_policy]
@@ -578,15 +466,15 @@ keystone-manage credential_setup --keystone-user keystone --keystone-group keyst
 - Thiết lập boostrap cho Keystone
 ```sh
 keystone-manage bootstrap --bootstrap-password passla123 \
---bootstrap-admin-url http://10.10.10.61:5000/v3/ \
---bootstrap-internal-url http://10.10.10.61:5000/v3/ \
---bootstrap-public-url http://10.10.10.61:5000/v3/ \
+--bootstrap-admin-url http://10.10.22.120:5000/v3/ \
+--bootstrap-internal-url http://10.10.22.120:5000/v3/ \
+--bootstrap-public-url http://10.10.22.120:5000/v3/ \
 --bootstrap-region-id RegionOne
 ```
 
 - Cấu hình apache cho keystone 
 ```sh
-sed -i 's|#ServerName www.example.com:80|ServerName 10.10.10.61|g' /etc/httpd/conf/httpd.conf 
+sed -i 's|#ServerName www.example.com:80|ServerName 10.10.22.120|g' /etc/httpd/conf/httpd.conf 
 ```
 
 - Create symlink cho keystone api
@@ -597,7 +485,7 @@ ls /etc/httpd/conf.d/
 
 - Start & Enable apache 
 ```sh 
-systemctl enable httpd.service
+systemctl enable --now httpd.service
 systemctl restart httpd.service
 systemctl status httpd.service
 ```
@@ -605,30 +493,32 @@ systemctl status httpd.service
 - Tạo file biến môi trường `openrc-admin` cho tài khoản quản trị
 ```sh 
 cat << EOF >> admin-openrc
+export export OS_REGION_NAME=RegionOne
 export OS_PROJECT_DOMAIN_NAME=Default
 export OS_USER_DOMAIN_NAME=Default
 export OS_PROJECT_NAME=admin
 export OS_USERNAME=admin
 export OS_PASSWORD=passla123
-export OS_AUTH_URL=http://10.10.10.61:5000/v3
+export OS_AUTH_URL=http://10.10.22.120:5000/v3
 export OS_IDENTITY_API_VERSION=3
 export OS_IMAGE_API_VERSION=2
-export PS1='[\u@\h \W(admin-openrc)]\$ '
+export PS1='[\u@\h \W(admin-openrc-r1)]\$ '
 EOF
 ```
 
 - Tạo file biến môi trường `openrc-demo` cho tài khoản  demo
 ```sh 
 cat << EOF >> demo-openrc
+export export OS_REGION_NAME=RegionOne
 export OS_PROJECT_DOMAIN_NAME=Default
 export OS_USER_DOMAIN_NAME=Default
 export OS_PROJECT_NAME=demo
 export OS_USERNAME=demo
 export OS_PASSWORD=passla123
-export OS_AUTH_URL=http://10.10.10.61:5000/v3
+export OS_AUTH_URL=http://10.10.22.120:5000/v3
 export OS_IDENTITY_API_VERSION=3
 export OS_IMAGE_API_VERSION=2
-export PS1='[\u@\h \W(demo-openrc)]\$ '
+export PS1='[\u@\h \W(demo-openrc-r1)]\$ '
 EOF
 ```
 
@@ -639,12 +529,12 @@ EOF
 source admin-openrc 
 ```
 
-- Tạo PJ Service
+- Tạo Project Service
 ```sh
 openstack project create --domain default --description "Service Project" service
 ```
 
-- Tạo PJ demo
+- Tạo Project demo
 ```sh 
 openstack project create --domain default --description "Demo Project" demo
 ```
@@ -659,25 +549,22 @@ openstack user create --domain default --password passla123 demo
 openstack role create user
 ```
 
-- Thêm roles user trên PJ demo 
+- Thêm roles user trên Project demo 
 ```sh 
 openstack role add --project demo --user demo user
 ```
 
-- Unset các biến môi trường 
+- Kiểm tra xác thực password trên Project admin
 ```sh 
 unset OS_AUTH_URL OS_PASSWORD
-```
 
-- Kiểm tra xác thực trên Project admin
-```sh 
-openstack --os-auth-url http://10.10.10.61:5000/v3 --os-project-domain-name Default \
+openstack --os-auth-url http://10.10.22.120:5000/v3 --os-project-domain-name Default \
 --os-user-domain-name Default --os-project-name admin --os-username admin token issue
 ```
 
 - Kiểm tra xác thực trên Project demo
 ```sh
-openstack --os-auth-url http://10.10.10.61:5000/v3 --os-project-domain-name default \
+openstack --os-auth-url http://10.10.22.120:5000/v3 --os-project-domain-name default \
 --os-user-domain-name default --os-project-name demo --os-username demo token issue
 ```
 
@@ -697,7 +584,7 @@ openstack token issue
 
 - Đăng nhập vào MySQL 
 ```sh 
-mysql -uroot -p
+mysql
 ```
 
 - Create DB và User cho Glance
@@ -736,9 +623,9 @@ openstack service create --name glance --description "OpenStack Image" image
 
 - Tạo các enpoint cho glane 
 ```sh 
-openstack endpoint create --region RegionOne image public http://10.10.10.61:9292
-openstack endpoint create --region RegionOne image internal http://10.10.10.61:9292
-openstack endpoint create --region RegionOne image admin http://10.10.10.61:9292
+openstack endpoint create --region RegionOne image public http://10.10.22.120:9292
+openstack endpoint create --region RegionOne image internal http://10.10.22.120:9292
+openstack endpoint create --region RegionOne image admin http://10.10.22.120:9292
 ```
 
 ###  Cài đặt cấu hình Glance
@@ -757,32 +644,38 @@ mv /etc/glance/glance-api.{conf,conf.bk}
 ```sh 
 cat << EOF >> /etc/glance/glance-api.conf
 [DEFAULT]
-bind_host = 10.10.10.61
-registry_host = 10.10.10.61
+bind_host = 10.10.22.120
+registry_host = 10.10.22.120
 [cors]
 [database]
-connection = mysql+pymysql://glance:passla123@10.10.10.61/glance
+connection = mysql+pymysql://glance:passla123@10.10.22.120/glance
 [glance_store]
 stores = file,http
 default_store = file
 filesystem_store_datadir = /var/lib/glance/images/
 [image_format]
 [keystone_authtoken]
-auth_uri = http://10.10.10.61:5000
-auth_url = http://10.10.10.61:5000
-memcached_servers = 10.10.10.61:11211
+auth_uri = http://10.10.22.120:5000
+auth_url = http://10.10.22.120:5000
+memcached_servers = 10.10.22.120:11211
 auth_type = password
 project_domain_name = Default
 user_domain_name = Default
 project_name = service
 username = glance
 password = passla123
+region_name = RegionOne
 [matchmaker_redis]
 [oslo_concurrency]
 [oslo_messaging_amqp]
 [oslo_messaging_kafka]
 [oslo_messaging_notifications]
+#driver = messagingv2
 [oslo_messaging_rabbit]
+#rabbit_ha_queues = true
+#rabbit_retry_interval = 1
+#rabbit_retry_backoff = 2
+#amqp_durable_queues= true
 [oslo_messaging_zmq]
 [oslo_middleware]
 [oslo_policy]
@@ -795,11 +688,6 @@ flavor = keystone
 EOF
 ```
 
-- Phân quyền lại file cấu hình
-```sh 
-chown root:glance /etc/glance/glance-api.conf
-```
-
 - Backup cấu hình glance-registry
 ```sh 
 mv /etc/glance/glance-registry.{conf,conf.bk}
@@ -809,24 +697,30 @@ mv /etc/glance/glance-registry.{conf,conf.bk}
 ```sh 
 cat << EOF >> /etc/glance/glance-registry.conf
 [DEFAULT]
-bind_host = 10.10.10.61
+bind_host = 10.10.22.120
 [database]
-connection = mysql+pymysql://glance:passla123@10.10.10.61/glance
+connection = mysql+pymysql://glance:passla123@10.10.22.120/glance
 [keystone_authtoken]
-auth_uri = http://10.10.10.61:5000
-auth_url = http://10.10.10.61:5000
-memcached_servers = 10.10.10.61
+auth_uri = http://10.10.22.120:5000
+auth_url = http://10.10.22.120:5000
+memcached_servers = 10.10.22.120
 auth_type = password
 project_domain_name = Default
 user_domain_name = Default
 project_name = service
 username = glance
 password = passla123
+region_name = RegionOne
 [matchmaker_redis]
 [oslo_messaging_amqp]
 [oslo_messaging_kafka]
 [oslo_messaging_notifications]
+#driver = messagingv2
 [oslo_messaging_rabbit]
+#rabbit_ha_queues = true
+#rabbit_retry_interval = 1
+#rabbit_retry_backoff = 2
+#amqp_durable_queues= true
 [oslo_messaging_zmq]
 [oslo_policy]
 [paste_deploy]
@@ -837,7 +731,7 @@ EOF
 
 - Phân quyền lại file cấu hình
 ```sh 
-chown root:glance /etc/glance/glance-registry.conf
+chown root:glance /etc/glance/*.conf
 ```
 
 - Đồng bộ database cho glance 
@@ -847,8 +741,7 @@ su -s /bin/sh -c "glance-manage db_sync" glance
 
 - Enable và restart Glance
 ```sh 
-systemctl enable openstack-glance-api.service openstack-glance-registry.service
-systemctl start openstack-glance-api.service openstack-glance-registry.service
+systemctl enable --now openstack-glance-api.service openstack-glance-registry.service
 ```
 
 - Download image cirros
@@ -875,7 +768,7 @@ openstack image list
 
 - Đăng nhập vào MySQL
 ```sh 
-mysql -u root -p
+mysql
 ```
 
 - Create DB và User cho Nova
@@ -915,9 +808,9 @@ openstack service create --name nova --description "OpenStack Compute" compute
     
 - Tạo các endpoint cho dịch vụ compute
 ```sh 
-openstack endpoint create --region RegionOne compute public http://10.10.10.61:8774/v2.1
-openstack endpoint create --region RegionOne compute internal http://10.10.10.61:8774/v2.1
-openstack endpoint create --region RegionOne compute admin http://10.10.10.61:8774/v2.1
+openstack endpoint create --region RegionOne compute public http://10.10.22.120:8774/v2.1
+openstack endpoint create --region RegionOne compute internal http://10.10.22.120:8774/v2.1
+openstack endpoint create --region RegionOne compute admin http://10.10.22.120:8774/v2.1
 ```
 
 - Tạo user placement
@@ -937,9 +830,9 @@ openstack service create --name placement --description "Placement API" placemen
 
 - Tạo endpoint cho placement
 ```sh 
-openstack endpoint create --region RegionOne placement public http://10.10.10.61:8778
-openstack endpoint create --region RegionOne placement internal http://10.10.10.61:8778
-openstack endpoint create --region RegionOne placement admin http://10.10.10.61:8778
+openstack endpoint create --region RegionOne placement public http://10.10.22.120:8778
+openstack endpoint create --region RegionOne placement internal http://10.10.22.120:8778
+openstack endpoint create --region RegionOne placement admin http://10.10.22.120:8778
 ```
 
 #### Cài đặt cấu hình Nova
@@ -959,28 +852,29 @@ mv /etc/nova/nova.{conf,conf.bk}
 ```sh
 cat << EOF >> /etc/nova/nova.conf
 [DEFAULT]
-my_ip = 10.10.10.61
+my_ip = 10.10.22.120
 enabled_apis = osapi_compute,metadata
 use_neutron = True
-osapi_compute_listen=10.10.10.61
-metadata_host=10.10.10.61
-metadata_listen=10.10.10.61
+osapi_compute_listen=10.10.22.120
+metadata_host=10.10.22.120
+metadata_listen=10.10.22.120
 metadata_listen_port=8775    
 firewall_driver = nova.virt.firewall.NoopFirewallDriver
 allow_resize_to_same_host=True
 notify_on_state_change = vm_and_task_state
-transport_url = rabbit://openstack:passla123@10.10.10.61:5672
+transport_url = rabbit://openstack:passla123@10.10.22.120:5672
 [api]
 auth_strategy = keystone
 [api_database]
-connection = mysql+pymysql://nova:passla123@10.10.10.61/nova_api
+connection = mysql+pymysql://nova:passla123@10.10.22.120/nova_api
 [barbican]
 [cache]
 backend = oslo_cache.memcache_pool
 enabled = true
-memcache_servers = 10.10.10.61:11211
+memcache_servers = 10.10.22.120:11211
 [cells]
 [cinder]
+os_region_name = RegionOne
 [compute]
 [conductor]
 [console]
@@ -988,12 +882,12 @@ memcache_servers = 10.10.10.61:11211
 [cors]
 [crypto]
 [database]
-connection = mysql+pymysql://nova:passla123@10.10.10.61/nova
+connection = mysql+pymysql://nova:passla123@10.10.22.120/nova
 [devices]
 [ephemeral_storage_encryption]
 [filter_scheduler]
 [glance]
-api_servers = http://10.10.10.61:9292
+api_servers = http://10.10.22.120:9292
 [guestfs]
 [healthcheck]
 [hyperv]
@@ -1001,19 +895,20 @@ api_servers = http://10.10.10.61:9292
 [key_manager]
 [keystone]
 [keystone_authtoken]
-auth_url = http://10.10.10.61:5000/v3
-memcached_servers = 10.10.10.61:11211
+auth_url = http://10.10.22.120:5000/v3
+memcached_servers = 10.10.22.120:11211
 auth_type = password
 project_domain_name = default
 user_domain_name = default
 project_name = service
 username = nova
 password = passla123
+region_name = RegionOne
 [libvirt]
 [matchmaker_redis]
 [metrics]
 [mks]
-[neutron]
+region_name = RegionOne
 [notifications]
 [osapi_v21]
 [oslo_concurrency]
@@ -1021,6 +916,7 @@ lock_path = /var/lib/nova/tmp
 [oslo_messaging_amqp]
 [oslo_messaging_kafka]
 [oslo_messaging_notifications]
+#driver = messagingv2
 [oslo_messaging_rabbit]
 rabbit_ha_queues = true
 rabbit_retry_interval = 1
@@ -1031,14 +927,14 @@ amqp_durable_queues= true
 [oslo_policy]
 [pci]
 [placement]
-os_region_name = RegionOne
 project_domain_name = Default
 project_name = service
 auth_type = password
 user_domain_name = Default
-auth_url = http://10.10.10.61:5000/v3
+auth_url = http://10.10.22.120:5000/v3
 username = placement
 password = passla123
+os_region_name = RegionOne
 [quota]
 [rdp]
 [remote_debug]
@@ -1052,11 +948,11 @@ discover_hosts_in_cells_interval = 300
 [vendordata_dynamic_auth]
 [vmware]
 [vnc]
-novncproxy_host=10.10.10.61
+novncproxy_host=10.10.22.120
 enabled = true
-vncserver_listen = 10.10.10.61
-vncserver_proxyclient_address = 10.10.10.61
-novncproxy_base_url = http://10.10.10.61:6080/vnc_auto.html
+vncserver_listen = 10.10.22.120
+vncserver_proxyclient_address = 10.10.22.120
+novncproxy_base_url = http://10.10.22.120:6080/vnc_auto.html
 [workarounds]
 [wsgi]
 [xenserver]
@@ -1093,8 +989,8 @@ EOF
 
 - Cấu hình bind cho nova placement api trên httpd 
 ```sh 
-sed -i -e 's/VirtualHost \*/VirtualHost 10.10.10.61/g' /etc/httpd/conf.d/00-nova-placement-api.conf
-sed -i -e 's/Listen 8778/Listen 10.10.10.61:8778/g' /etc/httpd/conf.d/00-nova-placement-api.conf
+sed -i -e 's/VirtualHost \*/VirtualHost 10.10.22.120/g' /etc/httpd/conf.d/00-nova-placement-api.conf
+sed -i -e 's/Listen 8778/Listen 10.10.22.120:8778/g' /etc/httpd/conf.d/00-nova-placement-api.conf
 ```
 
 - Restart httpd 
@@ -1110,7 +1006,7 @@ su -s /bin/sh -c "nova-manage cell_v2 create_cell --name=cell1 --verbose" nova
 su -s /bin/sh -c "nova-manage db sync" nova
 ```
 
-> Bước import nova database bỏ qua hết các Warning `use_tpool` ...
+> Bước import nova database bỏ qua hết các Warning `Duplicate` ...
 
 - Check nova cell
 ```sh 
@@ -1119,10 +1015,7 @@ nova-manage cell_v2 list_cells
 
 - Enable và start service nova 
 ```sh 
-systemctl enable openstack-nova-api.service openstack-nova-consoleauth.service \
-openstack-nova-scheduler.service openstack-nova-conductor.service \
-openstack-nova-novncproxy.service
-systemctl start openstack-nova-api.service openstack-nova-consoleauth.service \
+systemctl enable --now openstack-nova-api.service openstack-nova-consoleauth.service \
 openstack-nova-scheduler.service openstack-nova-conductor.service \
 openstack-nova-novncproxy.service
 ```
@@ -1130,6 +1023,18 @@ openstack-nova-novncproxy.service
 - Kiểm tra cài đặt lại dịch vụ 
 ```sh 
 openstack compute service list
+```
+
+> Kết quả 
+```sh 
+[root@controller ~(admin-openrc-r1)]$ openstack compute service list 
++----+------------------+------------+----------+---------+-------+----------------------------+
+| ID | Binary           | Host       | Zone     | Status  | State | Updated At                 |
++----+------------------+------------+----------+---------+-------+----------------------------+
+|  1 | nova-consoleauth | controller | internal | enabled | up    | 2019-10-25T08:00:49.000000 |
+|  2 | nova-scheduler   | controller | internal | enabled | up    | 2019-10-25T08:00:42.000000 |
+|  4 | nova-conductor   | controller | internal | enabled | up    | 2019-10-25T08:00:43.000000 |
++----+------------------+------------+----------+---------+-------+----------------------------+
 ```
 
 ### 3.3.2 Cấu hình trên Node Compute1
@@ -1149,10 +1054,11 @@ mv /etc/nova/nova.{conf,conf.bk}
 cat << EOF >> /etc/nova/nova.conf 
 [DEFAULT]
 enabled_apis = osapi_compute,metadata
-transport_url = rabbit://openstack:passla123@10.10.10.61:5672
-my_ip = 10.10.10.62
+transport_url = rabbit://openstack:passla123@10.10.22.120:5672
+my_ip = 10.10.22.121
 use_neutron = True
 firewall_driver = nova.virt.firewall.NoopFirewallDriver
+resume_guests_state_on_host_boot=false
 [api]
 auth_strategy = keystone
 [api_database]
@@ -1160,6 +1066,7 @@ auth_strategy = keystone
 [cache]
 [cells]
 [cinder]
+os_region_name = RegionOne
 [compute]
 [conductor]
 [console]
@@ -1171,7 +1078,7 @@ auth_strategy = keystone
 [ephemeral_storage_encryption]
 [filter_scheduler]
 [glance]
-api_servers = http://10.10.10.61:9292
+api_servers = http://10.10.22.120:9292
 [guestfs]
 [healthcheck]
 [hyperv]
@@ -1179,21 +1086,24 @@ api_servers = http://10.10.10.61:9292
 [key_manager]
 [keystone]
 [keystone_authtoken]
-auth_url = http://10.10.10.61:5000/v3
-memcached_servers = 10.10.10.61:11211
+auth_url = http://10.10.22.120:5000/v3
+memcached_servers = 10.10.22.120:11211
 auth_type = password
 project_domain_name = default
 user_domain_name = default
 project_name = service
 username = nova
 password = passla123
+region_name = RegionOne
 [libvirt]
 # egrep -c '(vmx|svm)' /proc/cpuinfo = 0
 virt_type = qemu
+#virt_type = kvm
+#cpu_mode = host-passthrough
+#hw_disk_discard = unmap
 [matchmaker_redis]
 [metrics]
 [mks]
-[neutron]
 [notifications]
 [osapi_v21]
 [oslo_concurrency]
@@ -1201,6 +1111,7 @@ lock_path = /var/lib/nova/tmp
 [oslo_messaging_amqp]
 [oslo_messaging_kafka]
 [oslo_messaging_notifications]
+#driver = messagingv2
 [oslo_messaging_rabbit]
 rabbit_ha_queues = true
 rabbit_retry_interval = 1
@@ -1211,14 +1122,14 @@ amqp_durable_queues= true
 [oslo_policy]
 [pci]
 [placement]
-os_region_name = RegionOne
 project_domain_name = Default
 project_name = service
 auth_type = password
 user_domain_name = Default
-auth_url = http://10.10.10.61:5000/v3
+auth_url = http://10.10.22.120:5000/v3
 username = placement
 password = passla123
+os_region_name = RegionOne
 [quota]
 [rdp]
 [remote_debug]
@@ -1233,8 +1144,8 @@ password = passla123
 [vnc]
 enabled = True
 server_listen = 0.0.0.0
-server_proxyclient_address = 10.10.10.62
-novncproxy_base_url = http://10.10.10.61:6080/vnc_auto.html
+server_proxyclient_address = 10.10.22.121
+novncproxy_base_url = http://10.10.22.120:6080/vnc_auto.html
 [workarounds]
 [wsgi]
 [xenserver]
@@ -1249,132 +1160,10 @@ chown root:nova /etc/nova/nova.conf
 
 - Enable và start service
 ```sh 
-systemctl enable libvirtd.service openstack-nova-compute.service
-systemctl start libvirtd.service openstack-nova-compute.service
+systemctl enable --now libvirtd.service openstack-nova-compute.service
 ```
 
-### 3.3.3 Cấu hình trên Node Compute2
-
-- Cài đặt package
-```sh
-yum install -y openstack-nova-compute libvirt-client
-```
-
-- Backup cấu hình nova 
-```sh 
-mv /etc/nova/nova.{conf,conf.bk}
-```
-
-- Cấu hình Nova 
-```sh 
-cat << EOF >> /etc/nova/nova.conf 
-[DEFAULT]
-enabled_apis = osapi_compute,metadata
-transport_url = rabbit://openstack:passla123@10.10.10.61:5672
-my_ip = 10.10.10.63
-use_neutron = True
-firewall_driver = nova.virt.firewall.NoopFirewallDriver
-[api]
-auth_strategy = keystone
-[api_database]
-[barbican]
-[cache]
-[cells]
-[cinder]
-[compute]
-[conductor]
-[console]
-[consoleauth]
-[cors]
-[crypto]
-[database]
-[devices]
-[ephemeral_storage_encryption]
-[filter_scheduler]
-[glance]
-api_servers = http://10.10.10.61:9292
-[guestfs]
-[healthcheck]
-[hyperv]
-[ironic]
-[key_manager]
-[keystone]
-[keystone_authtoken]
-auth_url = http://10.10.10.61:5000/v3
-memcached_servers = 10.10.10.61:11211
-auth_type = password
-project_domain_name = default
-user_domain_name = default
-project_name = service
-username = nova
-password = passla123
-[libvirt]
-# egrep -c '(vmx|svm)' /proc/cpuinfo = 0
-virt_type = qemu
-[matchmaker_redis]
-[metrics]
-[mks]
-[neutron]
-[notifications]
-[osapi_v21]
-[oslo_concurrency]
-lock_path = /var/lib/nova/tmp
-[oslo_messaging_amqp]
-[oslo_messaging_kafka]
-[oslo_messaging_notifications]
-[oslo_messaging_rabbit]
-rabbit_ha_queues = true
-rabbit_retry_interval = 1
-rabbit_retry_backoff = 2
-amqp_durable_queues= true
-[oslo_messaging_zmq]
-[oslo_middleware]
-[oslo_policy]
-[pci]
-[placement]
-os_region_name = RegionOne
-project_domain_name = Default
-project_name = service
-auth_type = password
-user_domain_name = Default
-auth_url = http://10.10.10.61:5000/v3
-username = placement
-password = passla123
-[quota]
-[rdp]
-[remote_debug]
-[scheduler]
-[serial_console]
-[service_user]
-[spice]
-[upgrade_levels]
-[vault]
-[vendordata_dynamic_auth]
-[vmware]
-[vnc]
-enabled = True
-server_listen = 0.0.0.0
-server_proxyclient_address = 10.10.10.63
-novncproxy_base_url = http://10.10.10.61:6080/vnc_auto.html
-[workarounds]
-[wsgi]
-[xenserver]
-[xvp]
-EOF
-```
-
-- Phân quyền lại file config
-```sh 
-chown root:nova /etc/nova/nova.conf
-```
-
-- Enable và start service
-```sh 
-systemctl enable libvirtd.service openstack-nova-compute.service
-systemctl start libvirtd.service openstack-nova-compute.service
-```
-
-### 3.3.4 Kiểm tra trên Controller 
+### 3.3.3 Kiểm tra trên Controller 
 
 - Sử dụng biến môi trường
 ```sh
@@ -1386,6 +1175,19 @@ source admin-openrc
 openstack compute service list
 ```
 
+> Kết quả
+```sh 
+[root@controller ~(admin-openrc-r1)]$ openstack compute service list 
++----+------------------+------------+----------+---------+-------+----------------------------+
+| ID | Binary           | Host       | Zone     | Status  | State | Updated At                 |
++----+------------------+------------+----------+---------+-------+----------------------------+
+|  1 | nova-consoleauth | controller | internal | enabled | up    | 2019-10-25T08:04:56.000000 |
+|  2 | nova-scheduler   | controller | internal | enabled | up    | 2019-10-25T08:04:49.000000 |
+|  4 | nova-conductor   | controller | internal | enabled | up    | 2019-10-25T08:04:58.000000 |
+|  8 | nova-compute     | compute1   | nova     | enabled | up    | 2019-10-25T08:04:57.000000 |
++----+------------------+------------+----------+---------+-------+----------------------------+
+```
+
 ## 3.4 Cài đặt Neutron (Service Network) <a name="3.4"></a> 
 
 ### 3.4.1 Cấu hình trên Node Controller
@@ -1394,7 +1196,7 @@ openstack compute service list
 
 - Đăng nhập MySQL
 ```sh 
-mysql -uroot -p
+mysql
 ```
 
 - Create DB và User cho Nova
@@ -1428,9 +1230,9 @@ openstack service create --name neutron --description "OpenStack Networking" net
 
 - Tạo các endpoint cho neutron 
 ```sh 
-openstack endpoint create --region RegionOne network public http://10.10.10.61:9696
-openstack endpoint create --region RegionOne network internal http://10.10.10.61:9696
-openstack endpoint create --region RegionOne network admin http://10.10.10.61:9696
+openstack endpoint create --region RegionOne network public http://10.10.22.120:9696
+openstack endpoint create --region RegionOne network internal http://10.10.22.120:9696
+openstack endpoint create --region RegionOne network admin http://10.10.22.120:9696
 ```
 
 #### Cài đặt cấu hình neutron
@@ -1452,10 +1254,10 @@ mv /etc/neutron/neutron.{conf,conf.bk}
 ```sh 
 cat << EOF >> /etc/neutron/neutron.conf
 [DEFAULT]
-bind_host = 10.10.10.61
+bind_host = 10.10.22.120
 core_plugin = ml2
 service_plugins = router
-transport_url = rabbit://openstack:passla123@10.10.10.61
+transport_url = rabbit://openstack:passla123@10.10.22.120
 auth_strategy = keystone
 notify_nova_on_port_status_changes = true
 notify_nova_on_port_data_changes = true
@@ -1464,27 +1266,28 @@ dhcp_agents_per_network = 2
 [agent]
 [cors]
 [database]
-connection = mysql+pymysql://neutron:passla123@10.10.10.61/neutron
+connection = mysql+pymysql://neutron:passla123@10.10.22.120/neutron
 [keystone_authtoken]
-auth_uri = http://10.10.10.61:5000
-auth_url = http://10.10.10.61:35357
-memcached_servers = 10.10.10.61:11211
+auth_uri = http://10.10.22.120:5000
+auth_url = http://10.10.22.120:5000
+memcached_servers = 10.10.22.120:11211
 auth_type = password
 project_domain_name = default
 user_domain_name = default
 project_name = service
 username = neutron
 password = passla123
+region_name = RegionOne
 [matchmaker_redis]
 [nova]
-auth_url = http://10.10.10.61:35357
+auth_url = http://10.10.22.120:5000
 auth_type = password
 project_domain_name = default
 user_domain_name = default
-region_name = RegionOne
 project_name = service
 username = nova
 password = passla123
+region_name = RegionOne
 [oslo_concurrency]
 lock_path = /var/lib/neutron/tmp
 [oslo_messaging_amqp]
@@ -1558,7 +1361,7 @@ cat << EOF >> /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 [DEFAULT]
 [agent]
 [linux_bridge]
-physical_interface_mappings = provider:ens192
+physical_interface_mappings = provider:eth1
 [network_log]
 [securitygroup]
 enable_security_group = true
@@ -1566,7 +1369,7 @@ firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
 [vxlan]
 # enable_vxlan = true
 ## network dataVM
-local_ip = 10.10.12.61
+local_ip = 10.10.24.120
 # l2_population = true
 EOF
 ```
@@ -1599,21 +1402,24 @@ chown root:neutron /etc/neutron/l3_agent.ini
 ```
 
 Bổ sung cấu hình phép nova service trên controller sử dụng networking service 
-- Chỉnh sửa bổ sung cấu hình `[neutron]` trong file `/etc/nova/nova.conf`
-```
-[neutron]
-url = http://10.10.10.61:9696
-auth_url = http://10.10.10.61:35357
+
+- Chỉnh sửa bổ sung cấu hình block `[neutron]` trong file `/etc/nova/nova.conf`
+```sh
+echo "[neutron]
+url = http://10.10.22.120:9696
+auth_url = http://10.10.22.120:5000
 auth_type = password
 project_domain_name = default
 user_domain_name = default
-region_name = RegionOne
 project_name = service
 username = neutron
 password = passla123
 service_metadata_proxy = true
 metadata_proxy_shared_secret = passla123
+region_name = RegionOne " >> /etc/nova/nova.conf
 ```
+
+
 Các Networking service initialization script yêu cầu symbolic link `/etc/neutron/plugin.ini` tới ML2 plug-in config file `/etc/neutron/plugins/ml2/ml2_conf.ini`
 
 - Khởi tạo symlink cho ml2_config 
@@ -1627,7 +1433,7 @@ su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf \
 --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
 ```
 
-- Khởi động lại Compute API service:
+- Khởi động lại các dịch vụ Nova:
 ```sh 
 systemctl restart openstack-nova-api.service openstack-nova-scheduler.service \
 openstack-nova-consoleauth.service openstack-nova-conductor.service \
@@ -1636,10 +1442,7 @@ openstack-nova-novncproxy.service
 
 - Enable và restart Neutron service 
 ```
-systemctl enable neutron-server.service neutron-linuxbridge-agent.service \
-neutron-l3-agent.service
-
-systemctl start neutron-server.service neutron-linuxbridge-agent.service \
+systemctl enable --now neutron-server.service neutron-linuxbridge-agent.service \
 neutron-l3-agent.service
 ```
 
@@ -1661,21 +1464,22 @@ mv /etc/neutron/neutron.{conf,conf.bk}
 ```sh 
 cat << EOF >> /etc/neutron/neutron.conf
 [DEFAULT]
-transport_url = rabbit://openstack:passla123@10.10.10.61:5672
+transport_url = rabbit://openstack:passla123@10.10.22.120:5672
 auth_strategy = keystone
 [agent]
 [cors]
 [database]
 [keystone_authtoken]
-auth_uri = http://10.10.10.61:5000
-auth_url = http://10.10.10.61:35357
-memcached_servers = 10.10.10.61:11211
+auth_uri = http://10.10.22.120:5000
+auth_url = http://10.10.22.120:5000
+memcached_servers = 10.10.22.120:11211
 auth_type = password
 project_domain_name = default
 user_domain_name = default
 project_name = service
 username = neutron
 password = passla123
+region_name = RegionOne
 [matchmaker_redis]
 [nova]
 [oslo_concurrency]
@@ -1683,6 +1487,7 @@ lock_path = /var/lib/neutron/tmp
 [oslo_messaging_amqp]
 [oslo_messaging_kafka]
 [oslo_messaging_notifications]
+#driver = messagingv2
 [oslo_messaging_rabbit]
 rabbit_ha_queues = true
 rabbit_retry_interval = 1
@@ -1716,7 +1521,7 @@ cat << EOF >> /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 [DEFAULT]
 [agent]
 [linux_bridge]
-physical_interface_mappings = provider:ens192
+physical_interface_mappings = provider:eth1
 [network_log]
 [securitygroup]
 enable_security_group = true
@@ -1724,7 +1529,7 @@ firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
 [vxlan]
 # enable_vxlan = true
 ## network dataVM
-local_ip = 10.10.12.62
+local_ip = 10.10.24.121
 # l2_population = true
 EOF
 ```
@@ -1770,7 +1575,8 @@ mv /etc/neutron/metadata_agent.{ini,ini.bk}
 ```sh 
 cat << EOF >> /etc/neutron/metadata_agent.ini
 [DEFAULT]
-nova_metadata_host = 10.10.10.61
+# IP mngt controller 
+nova_metadata_host = 10.10.22.120
 metadata_proxy_shared_secret = passla123
 [agent]
 [cache]
@@ -1786,16 +1592,16 @@ chown root:neutron /etc/neutron/metadata_agent.ini
 
 - Bổ sung cấu hình phần `[neutron]` trong `/etc/nova/nova.conf`
 ```sh 
-[neutron]
-url = http://10.10.10.61:9696
-auth_url = http://10.10.10.61:35357
+echo "[neutron]
+url = http://10.10.22.120:9696
+auth_url = http://10.10.22.120:5000
 auth_type = password
 project_domain_name = default
 user_domain_name = default
-region_name = RegionOne
 project_name = service
 username = neutron
 password = passla123
+region_name = RegionOne " >> /etc/nova/nova.conf
 ```
 
 - Restart lại Compute service
@@ -1805,229 +1611,156 @@ systemctl restart openstack-nova-compute.service libvirtd.service
 
 - Enable và start linuxbridge_agent dhcp_agent metadata_agent
 ```sh 
-systemctl enable neutron-linuxbridge-agent.service \
-neutron-dhcp-agent.service neutron-metadata-agent.service
-
-systemctl start neutron-linuxbridge-agent.service \
+systemctl enable --now neutron-linuxbridge-agent.service \
 neutron-dhcp-agent.service neutron-metadata-agent.service
 ```
 
-### Quay lại node Controller kiểm tra
+###  3.4.3 Quay lại node Controller kiểm tra
+
+Kiểm tra 
 ```sh 
-[root@controller ~(admin-openrc)]$ source admin-openrc 
-[root@controller ~(admin-openrc)]$ openstack network agent list 
+source admin-openrc
+openstack network agent list
+```
+
+> Kết quả
+```sh 
+[root@controller ~(admin-openrc-r1)]$ openstack network agent list 
 +--------------------------------------+--------------------+------------+-------------------+-------+-------+---------------------------+
 | ID                                   | Agent Type         | Host       | Availability Zone | Alive | State | Binary                    |
 +--------------------------------------+--------------------+------------+-------------------+-------+-------+---------------------------+
-| 314bb32d-bd5b-4f84-833e-40efada2634b | Linux bridge agent | compute01  | None              | :-)   | UP    | neutron-linuxbridge-agent |
-| 47074bb4-d9eb-4781-894a-4af6fcfcf97a | DHCP agent         | compute01  | nova              | :-)   | UP    | neutron-dhcp-agent        |
-| 972fb008-d6a7-45a1-8769-72247b76229b | Linux bridge agent | controller | None              | :-)   | UP    | neutron-linuxbridge-agent |
-| a412c91c-5933-4277-bef6-618b93c6fd5d | Metadata agent     | compute01  | None              | :-)   | UP    | neutron-metadata-agent    |
-| cba1872d-b46f-4857-bff6-fd9ffeca0fed | L3 agent           | controller | nova              | :-)   | UP    | neutron-l3-agent          |
+| 80da032e-8c70-401d-8b4e-a6f2d8d58f17 | Metadata agent     | compute1   | None              | :-)   | UP    | neutron-metadata-agent    |
+| 99a61a9c-f30a-4bde-be72-26f56ee25f91 | Linux bridge agent | compute1   | None              | :-)   | UP    | neutron-linuxbridge-agent |
+| 9d70e5e2-5e0f-4c67-9850-dca17be3e5d0 | L3 agent           | controller | nova              | :-)   | UP    | neutron-l3-agent          |
+| ea1d1198-90c3-4fac-9d7a-1f42c8f4bf2e | DHCP agent         | compute1   | nova              | :-)   | UP    | neutron-dhcp-agent        |
+| ea6adbbf-2786-4d64-a345-d8a3469df4d4 | Linux bridge agent | controller | None              | :-)   | UP    | neutron-linuxbridge-agent |
 +--------------------------------------+--------------------+------------+-------------------+-------+-------+---------------------------+
 ```
-### 3.4.3 Cấu hình trên Node Compute2
 
-- Cài đặt các package 
+## 3.5 Cài đặt Horizon (Service Dashboard) (Chỉ cấu hình trên Node Controller) <a name="3.5"></a>
+
+### Cài đặt cấu hình 
+
+- Cài đặt packages
 ```sh 
-yum install openstack-neutron openstack-neutron-ml2 openstack-neutron-linuxbridge ebtables -y
+yum install -y openstack-dashboard
 ```
 
-Cấu hình neutron 
-
-- Backup neutron config 
+- Tạo file direct
 ```sh 
-mv /etc/neutron/neutron.{conf,conf.bk}
-```
-
-- Cấu hình neutron 
-```sh 
-cat << EOF >> /etc/neutron/neutron.conf
-[DEFAULT]
-transport_url = rabbit://openstack:passla123@10.10.10.61:5672
-auth_strategy = keystone
-[agent]
-[cors]
-[database]
-[keystone_authtoken]
-auth_uri = http://10.10.10.61:5000
-auth_url = http://10.10.10.61:35357
-memcached_servers = 10.10.10.61:11211
-auth_type = password
-project_domain_name = default
-user_domain_name = default
-project_name = service
-username = neutron
-password = passla123
-[matchmaker_redis]
-[nova]
-[oslo_concurrency]
-lock_path = /var/lib/neutron/tmp
-[oslo_messaging_amqp]
-[oslo_messaging_kafka]
-[oslo_messaging_notifications]
-[oslo_messaging_rabbit]
-[oslo_messaging_zmq]
-[oslo_middleware]
-[oslo_policy]
-[quotas]
-[ssl]
+filehtml=/var/www/html/index.html
+touch $filehtml
+cat << EOF >> $filehtml
+<html>
+<head>
+<META HTTP-EQUIV="Refresh" Content="0.5; URL=http://10.10.22.120/dashboard">
+</head>
+<body>
+<center> <h1>Redirecting to OpenStack Dashboard</h1> </center>
+</body>
+</html>
 EOF
 ```
-
-- Phân quyền lại file nova config
-```sh 
-chown root:neutron /etc/neutron/neutron.conf
-```
-
-Cấu hình linuxbridge_agent
-
-- Backup linuxbridge_agent config 
-```sh 
-mv /etc/neutron/plugins/ml2/linuxbridge_agent.{ini,ini.bk}
-```
-
-- Config linuxbridge_agent
-```sh 
-cat << EOF >> /etc/neutron/plugins/ml2/linuxbridge_agent.ini
-[DEFAULT]
-[agent]
-[linux_bridge]
-physical_interface_mappings = provider:ens192
-[network_log]
-[securitygroup]
-enable_security_group = true
-firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
-[vxlan]
-# enable_vxlan = true
-## network dataVM
-local_ip = 10.10.12.63
-# l2_population = true
-EOF
-```
-
-- Phân quyền lại cho file linuxbridge_agent config 
-```sh 
-chown root:neutron /etc/neutron/plugins/ml2/linuxbridge_agent.ini
-```
-
-Cấu hình DHCP agent
-
-- Backup cấu hình dhcp_agent 
-```sh 
-mv /etc/neutron/dhcp_agent.{ini,ini.bk}
-```
-
-- Cấu hình dhcp_agent
-```sh 
-cat << EOF >> /etc/neutron/dhcp_agent.ini
-[DEFAULT]
-interface_driver = linuxbridge
-dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq
-enable_isolated_metadata = true
-force_metadata = True
-[agent]
-[ovs]
-EOF
-```
-
-- Phân quyền lại file config 
-```sh 
-chown root:neutron /etc/neutron/dhcp_agent.ini
-```
-
-Cấu hình metadata_agent
-
+	
 - Backup file cấu hình 
 ```sh 
-mv /etc/neutron/metadata_agent.{ini,ini.bk}
+mv  /etc/openstack-dashboard/{local_settings,local_settings.bk}
 ```
 
-- Chỉnh sửa config 
+- Cập nhật cấu hình 
+```sh
+curl --url https://raw.githubusercontent.com/uncelvel/tutorial-openstack/master/docs/template/local_settings --output /etc/openstack-dashboard/local_settings
+
+new_secret=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 20 | head -n 1)
+sed -Ei "s|00000000|$new_secret|g" /etc/openstack-dashboard/local_settings
+
+sed -Ei 's|0.0.0.0|10.10.22.120|g' /etc/openstack-dashboard/local_settings
+
+chmod 640 /etc/openstack-dashboard/local_settings
+chown root:apache /etc/openstack-dashboard/local_settings
+```
+	
+- Thêm config httpd cho dashboard
 ```sh 
-cat << EOF >> /etc/neutron/metadata_agent.ini
-[DEFAULT]
-nova_metadata_host = 10.10.10.61
-metadata_proxy_shared_secret = passla123
-[agent]
-[cache]
-EOF
+echo "WSGIApplicationGroup %{GLOBAL}" >> /etc/httpd/conf.d/openstack-dashboard.conf
 ```
 
-- Phân quyền lại file config 
+- Restart service httpd và memcached
 ```sh 
-chown root:neutron /etc/neutron/metadata_agent.ini
-```
+systemctl restart httpd.service memcached.service
+```	
 
-Để nova services trên node compute có thể sử dụng networking service thì chúng ta bổ sung thêm cấu hình cho nova.conf như sau 
+### Hoàn tất cài đặt truy cập Dashboard 
 
-- Bổ sung cấu hình phần `[neutron]` trong `/etc/nova/nova.conf`
 ```sh 
-[neutron]
-url = http://10.10.10.61:9696
-auth_url = http://10.10.10.61:35357
-auth_type = password
-project_domain_name = default
-user_domain_name = default
-region_name = RegionOne
-project_name = service
-username = neutron
-password = passla123
+http://10.10.22.120
+user: admin
+password: passla123
 ```
 
-- Restart lại Compute service
-```sh 
-systemctl restart openstack-nova-compute.service libvirtd.service 
-```
+![](../../images/stein/dashboard001.png)
 
-- Enable và start linuxbridge_agent dhcp_agent metadata_agent
-```sh 
-systemctl enable neutron-linuxbridge-agent.service \
-neutron-dhcp-agent.service neutron-metadata-agent.service
+### Tạo network
+Truy cập `Admin` --> `Network` --> `Networks` Chọn `Create Network`
 
-systemctl start neutron-linuxbridge-agent.service \
-neutron-dhcp-agent.service neutron-metadata-agent.service
-```
+![](../../images/stein/dashboard002.png)
+![](../../images/stein/dashboard003.png)
+![](../../images/stein/dashboard004.png)
+![](../../images/stein/dashboard005.png)
 
-### Quay lại node Controller kiểm tra
-```sh 
-[root@controller ~(admin-openrc)]$ source admin-openrc 
-[root@controller ~(admin-openrc)]$ openstack network agent list 
-+--------------------------------------+--------------------+------------+-------------------+-------+-------+---------------------------+
-| ID                                   | Agent Type         | Host       | Availability Zone | Alive | State | Binary                    |
-+--------------------------------------+--------------------+------------+-------------------+-------+-------+---------------------------+
-| 314bb32d-bd5b-4f84-833e-a263440efadb | Linux bridge agent | compute01  | None              | :-)   | UP    | neutron-linuxbridge-agent |
-| 314bb32d-bd5b-4f84-833e-42634b0efada | Linux bridge agent | compute02  | None              | :-)   | UP    | neutron-linuxbridge-agent |
-| 47074bb4-d9eb-4781-894a-4af97f6fcfca | DHCP agent         | compute01  | nova              | :-)   | UP    | neutron-dhcp-agent        |
-| 47074bb4-d9eb-4781-894a-4afcf97af6fc | DHCP agent         | compute02  | nova              | :-)   | UP    | neutron-dhcp-agent        |
-| 972fb008-d6a7-45a1-8769-72247b76229b | Linux bridge agent | controller | None              | :-)   | UP    | neutron-linuxbridge-agent |
-| a412c91c-5933-4277-bef6-618b93c6fd5d | Metadata agent     | compute01  | None              | :-)   | UP    | neutron-metadata-agent    |
-| a412c91c-5933-4277-bef6-61c6fd5d8b93 | Metadata agent     | compute02  | None              | :-)   | UP    | neutron-metadata-agent    |
-| cba1872d-b46f-4857-bff6-fd9ffeca0fed | L3 agent           | controller | nova              | :-)   | UP    | neutron-l3-agent          |
-+--------------------------------------+--------------------+------------+-------------------+-------+-------+---------------------------+
-```
+### Tạo Flavor
+Truy cập `Admin` --> `Compute` --> `Flavors` Chọn `Create Flavor`
 
-## 3.5 Cài đặt Cinder (Service Storage) (Chỉ cấu hình trên Node Controller) <a name="3.5"></a>
+![](../../images/stein/dashboard006.png)
+![](../../images/stein/dashboard007.png)
 
-Chuẩn bị: Add thêm 1 ổ `/dev/sdb` tối thiểu 100G vào Node Controller
+### Boot thử 1 máy ảo 
+Truy cập `Projects` --> `Compute` --> `Instance` Chọn `Launch Instance`
+
+![](../../images/stein/dashboard008.png)
+![](../../images/stein/dashboard009.png)
+![](../../images/stein/dashboard010.png)
+![](../../images/stein/dashboard011.png)
+
+Click vào VM và kiểm tra login, kết nối internet 
+
+![](../../images/stein/dashboard012.png)
+
+> VM tạo thành công Kết nối Internet OK nhưng phía ngoài chưa kết nối được vào VM qua SSH
+
+### Mở Security Group 
+Truy cập `Projects` --> `Network` --> `Security Groups` Chọn `Manage Rules`
+
+![](../../images/stein/dashboard013.png)
+
+Chọn `Add rules`
+
+![](../../images/stein/dashboard014.png)
+
+> Kiểm tra lại VM ok có thể ping ssh 
+
+![](../../images/stein/dashboard015.png)
+
+## 3.6 Cài đặt Cinder (Service Storage) với backend là LVM (Chỉ cấu hình trên Node Controller) <a name="3.6"></a>
+
+Đối với hệ thống đã cài đặt xong đến bước 3.5 thì mới chỉ có thể boot được VM từ local (Disk VM sẽ nằm trên chính Compute). Cinder sẽ cung cấp giải pháp lưu trữ cho OPS cho phép lưu trữ disk của VM tại Share Storage (Ở đây là LVM ))
+
+Chuẩn bị: Add thêm 1 ổ `/dev/vdb` tối thiểu 100G vào Node Controller
 
 - Kiểm tra ổ 
 ```sh
-[root@controller ~(admin-openrc)]$ lsblk
-NAME                    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
-sr0                      11:0    1 1024M  0 rom  
-sda                     252:0    0   50G  0 disk 
-├─sda1                  252:1    0    4G  0 part /boot
-├─sda2                  252:2    0   38G  0 part 
-│ └─VolGroup00-LogVol01 253:0    0   38G  0 lvm  /
-└─vda3                  252:3    0    8G  0 part [SWAP]
-sdb                     252:16   0  100G  0 disk 
-[root@controller ~(admin-openrc)]$ 
+[root@controller ~]# lsblk 
+NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sr0     11:0    1 1024M  0 rom  
+vda    253:0    0   30G  0 disk 
+└─vda1 253:1    0   30G  0 part /
+vdb    253:16   0   50G  0 disk 
+[root@controller ~]# 
 ```
 
 - Đăng nhập MySQL
 ```sh 
-mysql -u root -p
+mysql
 ```
 
 - Create DB và User cho Cinder
@@ -2062,18 +1795,18 @@ openstack service create --name cinderv3 --description "OpenStack Block Storage"
 - Tạo Block Storage service API endpoints:
 ```sh 
 openstack endpoint create --region RegionOne volumev2 \
-public http://10.10.10.61:8776/v2/%\(project_id\)s
+public http://10.10.22.120:8776/v2/%\(project_id\)s
 openstack endpoint create --region RegionOne volumev2 \
-internal http://10.10.10.61:8776/v2/%\(project_id\)s
+internal http://10.10.22.120:8776/v2/%\(project_id\)s
 openstack endpoint create --region RegionOne volumev2 \
-admin http://10.10.10.61:8776/v2/%\(project_id\)s
+admin http://10.10.22.120:8776/v2/%\(project_id\)s
 
 openstack endpoint create --region RegionOne volumev3 \
-public http://10.10.10.61:8776/v3/%\(project_id\)s
+public http://10.10.22.120:8776/v3/%\(project_id\)s
 openstack endpoint create --region RegionOne volumev3 \
-internal http://10.10.10.61:8776/v3/%\(project_id\)s
+internal http://10.10.22.120:8776/v3/%\(project_id\)s
 openstack endpoint create --region RegionOne volumev3 \
-admin http://10.10.10.61:8776/v3/%\(project_id\)s
+admin http://10.10.22.120:8776/v3/%\(project_id\)s
 ```
 
 - Cài đặt packages
@@ -2083,20 +1816,21 @@ yum install -y lvm2 device-mapper-persistent-data openstack-cinder targetcli
 
 - Enable và start LVM metadata service
 ```
-systemctl enable lvm2-lvmetad.service
-systemctl start lvm2-lvmetad.service
+systemctl enable --now lvm2-lvmetad.service
 ```
 
-- Chỉnh sửa file `/etc/lvm/lvm.conf` bổ sung filter cho `sdb`
+- Chỉnh sửa file `/etc/lvm/lvm.conf` bổ sung filter cho `vdb`
 ```sh 
     # Line 142
-    filter = [ "a/sdb/", "r/.*/"]
+    filter = [ "a/vdb/", "r/.*/"]
 ```
 
-- Tạo LVM volume /dev/sdb:
+![](../../images/stein/dashboard016.png)
+
+- Tạo LVM volume /dev/vdb:
 ```
-pvcreate /dev/sdb
-vgcreate cinder-volumes /dev/sdb
+pvcreate /dev/vdb
+vgcreate cinder-volumes /dev/vdb
 ```
 
 Cấu hình Cinder 
@@ -2110,11 +1844,13 @@ mv /etc/cinder/cinder.{conf,conf.bk}
 ```sh 
 cat << EOF >> /etc/cinder/cinder.conf
 [DEFAULT]
-transport_url = rabbit://openstack:passla123@10.10.10.61
+transport_url = rabbit://openstack:passla123@10.10.22.120
 auth_strategy = keystone
-my_ip = 10.10.10.61
+my_ip = 10.10.22.120
 enabled_backends = lvm
-glance_api_servers = http://10.10.10.61:9292
+glance_api_servers = http://10.10.22.120:9292
+#rpc_backend = rabbit
+#control_exchange = cinder
 [lvm]
 volume_driver = cinder.volume.drivers.lvm.LVMVolumeDriver
 volume_group = cinder-volumes
@@ -2128,20 +1864,21 @@ iscsi_helper = lioadm
 [coordination]
 [cors]
 [database]
-connection = mysql+pymysql://cinder:passla123@10.10.10.61/cinder
+connection = mysql+pymysql://cinder:passla123@10.10.22.120/cinder
 [fc-zone-manager]
 [healthcheck]
 [key_manager]
 [keystone_authtoken]
-auth_uri = http://10.10.10.61:5000
-auth_url = http://10.10.10.61:35357
-memcached_servers = 10.10.10.61:11211
+auth_uri = http://10.10.22.120:5000
+auth_url = http://10.10.22.120:5000
+memcached_servers = 10.10.22.120:11211
 auth_type = password
 project_domain_id = default
 user_domain_id = default
 project_name = service
 username = cinder
 password = passla123
+region_name = RegionOne
 [matchmaker_redis]
 [nova]
 [oslo_concurrency]
@@ -2149,7 +1886,12 @@ lock_path = /var/lib/cinder/tmp
 [oslo_messaging_amqp]
 [oslo_messaging_kafka]
 [oslo_messaging_notifications]
+#driver = messagingv2
 [oslo_messaging_rabbit]
+#rabbit_retry_interval = 1
+#rabbit_retry_backoff = 2
+#amqp_durable_queues = true
+#rabbit_ha_queues = true
 [oslo_messaging_zmq]
 [oslo_middleware]
 [oslo_policy]
@@ -2179,127 +1921,48 @@ systemctl restart openstack-nova-api.service
 
 Enable và start Block Storage services
 ```sh
-systemctl enable openstack-cinder-api.service openstack-cinder-scheduler.service openstack-cinder-volume.service 
-systemctl start openstack-cinder-api.service openstack-cinder-scheduler.service openstack-cinder-volume.service 
+systemctl enable --now openstack-cinder-api.service openstack-cinder-scheduler.service openstack-cinder-volume.service 
 ```
 
 Kiểm tra 
 ```sh 
-[root@controller ~(admin-openrc)]$ cinder service-list 
-+------------------+-----------------+------+---------+-------+----------------------------+-----------------+
-| Binary           | Host            | Zone | Status  | State | Updated_at                 | Disabled Reason |
-+------------------+-----------------+------+---------+-------+----------------------------+-----------------+
-| cinder-scheduler | controller      | nova | enabled | up    | 2019-05-06T07:20:02.000000 | -               |
-| cinder-volume    | controller@lvm  | nova | enabled | up    | 2019-05-02T07:42:52.000000 | -               |
-+------------------+-----------------+------+---------+-------+----------------------------+-----------------+
+cinder service-list
 ```
 
-## 3.6 Cài đặt Horizon (Service Dashboard) (Chỉ cấu hình trên Node Controller) <a name="3.6"></a>
-
-- Cài đặt packages
+> Kết quả
 ```sh 
-yum install -y openstack-dashboard
+[root@controller ~(admin-openrc-r1)]$ cinder service-list
++------------------+----------------+------+---------+-------+----------------------------+-----------------+
+| Binary           | Host           | Zone | Status  | State | Updated_at                 | Disabled Reason |
++------------------+----------------+------+---------+-------+----------------------------+-----------------+
+| cinder-scheduler | controller     | nova | enabled | up    | 2019-10-26T08:25:23.000000 | -               |
+| cinder-volume    | controller@lvm | nova | enabled | up    | 2019-10-26T08:25:23.000000 | -               |
++------------------+----------------+------+---------+-------+----------------------------+-----------------+
+[root@controller ~(admin-openrc-r1)]$ lsblk 
+NAME                                            MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sr0                                              11:0    1 1024M  0 rom  
+vda                                             253:0    0   30G  0 disk 
+└─vda1                                          253:1    0   30G  0 part /
+vdb                                             253:16   0   50G  0 disk 
+├─cinder--volumes-cinder--volumes--pool_tmeta   252:0    0   48M  0 lvm  
+│ └─cinder--volumes-cinder--volumes--pool-tpool 252:2    0 47,5G  0 lvm  
+│   └─cinder--volumes-cinder--volumes--pool     252:3    0 47,5G  0 lvm  
+└─cinder--volumes-cinder--volumes--pool_tdata   252:1    0 47,5G  0 lvm  
+  └─cinder--volumes-cinder--volumes--pool-tpool 252:2    0 47,5G  0 lvm  
+    └─cinder--volumes-cinder--volumes--pool     252:3    0 47,5G  0 lvm  
+[root@controller ~(admin-openrc-r1)]$ 
 ```
 
-- Tạo file direct
-```sh 
-filehtml=/var/www/html/index.html
-touch $filehtml
-cat << EOF >> $filehtml
-<html>
-<head>
-<META HTTP-EQUIV="Refresh" Content="0.5; URL=http://10.10.10.61/dashboard">
-</head>
-<body>
-<center> <h1>Redirecting to OpenStack Dashboard</h1> </center>
-</body>
-</html>
-EOF
-```
-	
-- Backup file cấu hình 
-```sh 
-cp /etc/openstack-dashboard/{local_settings,local_settings.bk}
-```
+### Tiến hành tạo Volume thử và kiểm tra 
 
-- Chỉnh sửa cấu hình
-```sh
-vi /etc/openstack-dashboard/local_settings
-       
-# line 38
-ALLOWED_HOSTS = ['*',]
-OPENSTACK_API_VERSIONS = {
-    "identity": 3,
-    "image": 2,
-    "volume": 2,
-}
-OPENSTACK_KEYSTONE_MULTIDOMAIN_SUPPORT = True
-OPENSTACK_KEYSTONE_DEFAULT_DOMAIN = 'Default'
-    
-# line 171 add
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
-        'LOCATION': ['10.10.10.61:11211',]
-    }
-}
+Truy cập `Projects` --> `Volumes` --> `Volumes` Chọn `Create Volume`
 
-#line 205
-OPENSTACK_HOST = "10.10.10.61"
-OPENSTACK_KEYSTONE_URL = "http://10.10.10.61:5000/v3"
-OPENSTACK_KEYSTONE_DEFAULT_ROLE = "user"
+![](../../images/stein/dashboard017.png)
+![](../../images/stein/dashboard018.png)
+![](../../images/stein/dashboard019.png)
 
-#line 481
-TIME_ZONE = "Asia/Ho_Chi_Minh"
-```
-	
-- Thêm config httpd cho dashboard
-```sh 
-echo "WSGIApplicationGroup %{GLOBAL}" >> /etc/httpd/conf.d/openstack-dashboard.conf
-```
+### Tiến hành tạo VM mới từ volume và kiểm tra 
 
-- Restart service httpd và memcached
-```sh 
-systemctl restart httpd.service memcached.service
-```	
+![](../../images/stein/dashboard020.png)
+![](../../images/stein/dashboard021.png)
 
-## 3.7 Hoàn tất cài đặt truy cập Dashboard 
-
-```sh 
-http://10.10.10.61
-user: admin
-password: passla123
-```
-
-![](../../images/noha_dashboard.png)
-
-## 3.8 Tạo network
-Truy cập `Admin` --> `Network` --> `Networks` Chọn `Create Network`
-![](../../images/noha_createnetwork1.png)
-![](../../images/noha_createnetwork2.png)
-![](../../images/noha_createnetwork3.png)
-![](../../images/noha_createnetwork4.png)
-
-
-## 3.9 Tạo Flavor
-Truy cập `Admin` --> `Compute` --> `Flavors` Chọn `Create Flavor`
-![](../../images/noha_createflavor01.png)
-
-## 3.9 Boot thử 1 máy ảo 
-Truy cập `Projects` --> `Compute` --> `Instance` Chọn `Launch Instance`
-![](../../images/noha_createvm01.png)
-![](../../images/noha_createvm02.png)
-![](../../images/noha_createvm03.png)
-![](../../images/noha_createvm04.png)
-
-> VM tạo thành công nhưng chưa ping được ra ngoài, SSH ngoài vào ko OK 
-
-## 3.10 Mở Security Group 
-Truy cập `Projects` --> `Network` --> `Security Groups` Chọn `Manage Rules`
-![](../../images/noha_sc01.png)
-
-Chọn `Add rules`
-![](../../images/noha_sc02.png)
-
-> Kiểm tra lại VM ok 
